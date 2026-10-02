@@ -1,0 +1,825 @@
+<title>ESP32 SD Recorder — Remote</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #12171c;
+    --surface: #1b232a;
+    --surface-2: #222c34;
+    --ink: #eef3f5;
+    --ink-dim: #8fa1ab;
+    --line: #2b363e;
+    --accent: #4fc3d1;
+    --accent-ink: #06282c;
+    --rec: #ef4444;
+    --ok: #52c78d;
+    --focus: #7fd7e2;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f2f6f7;
+    --surface: #ffffff;
+    --surface-2: #eaf1f2;
+    --ink: #121a1e;
+    --ink-dim: #5b6b73;
+    --line: #d7e1e3;
+    --accent: #0f8fa1;
+    --accent-ink: #ffffff;
+    --rec: #d92d2d;
+    --ok: #1f9d64;
+    --focus: #0f8fa1;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root { }
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f2f6f7;
+      --surface: #ffffff;
+      --surface-2: #eaf1f2;
+      --ink: #121a1e;
+      --ink-dim: #5b6b73;
+      --line: #d7e1e3;
+      --accent: #0f8fa1;
+      --accent-ink: #ffffff;
+      --rec: #d92d2d;
+      --ok: #1f9d64;
+      --focus: #0f8fa1;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #12171c;
+    --surface: #1b232a;
+    --surface-2: #222c34;
+    --ink: #eef3f5;
+    --ink-dim: #8fa1ab;
+    --line: #2b363e;
+    --accent: #4fc3d1;
+    --accent-ink: #06282c;
+    --rec: #ef4444;
+    --ok: #52c78d;
+    --focus: #7fd7e2;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  }
+
+  .mono {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 26px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 12px 32px -16px rgba(0, 0, 0, 0.4);
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .device-id {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px 5px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface-2);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  .pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .pill.ok { color: var(--ok); }
+  .pill.rec { color: var(--rec); }
+
+  .pill.rec .dot {
+    animation: pulse-dot 1.1s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill.rec .dot { animation: none; }
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 0 4px;
+  }
+
+  .record-btn {
+    width: 168px;
+    height: 168px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 2px var(--line);
+    transition: box-shadow 0.15s ease, transform 0.08s ease;
+    position: relative;
+  }
+
+  .record-btn:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+  .record-btn:active { transform: scale(0.97); }
+
+  .record-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .record-btn .glyph {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--rec);
+    transition: border-radius 0.15s ease, width 0.15s ease, height 0.15s ease, background 0.15s ease;
+  }
+
+  .record-btn.recording .glyph {
+    border-radius: 8px;
+    width: 46px;
+    height: 46px;
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .record-btn.recording .glyph { animation: none; }
+  }
+
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+    50% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+  }
+
+  .record-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .record-label {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .elapsed {
+    font-size: 13px;
+    color: var(--ink-dim);
+    height: 16px;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .connect-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  button.action {
+    flex: 1;
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  button.action:hover { border-color: var(--accent); }
+
+  button.action:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  button.action.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: transparent;
+  }
+
+  button.action:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .message {
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  .message.error { color: var(--rec); }
+
+  .stats {
+    display: flex;
+    gap: 10px;
+  }
+
+  .stat {
+    flex: 1;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+
+  .stat .stat-value {
+    font-size: 14px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat.warn .stat-value { color: var(--rec); }
+
+  .alert {
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    background: color-mix(in srgb, var(--rec) 14%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--rec) 40%, var(--line));
+    color: var(--ink);
+  }
+
+  .alert.warn {
+    background: color-mix(in srgb, #e0a72a 16%, var(--surface));
+    border-color: color-mix(in srgb, #e0a72a 45%, var(--line));
+  }
+
+  .alert.visible { display: flex; }
+
+  .alert .alert-icon { flex-shrink: 0; }
+
+  details {
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+
+  summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  summary::-webkit-details-marker { display: none; }
+
+  summary::before {
+    content: "▸";
+    font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+
+  details[open] summary::before { transform: rotate(90deg); }
+
+  .log {
+    margin-top: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--ink-dim);
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .log div span.t { color: var(--ink-dim); opacity: 0.6; margin-right: 8px; }
+
+  .uuids {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    word-break: break-all;
+  }
+
+  .compat {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    text-align: center;
+    line-height: 1.5;
+  }
+</style>
+
+<div class="panel">
+  <header>
+    <div class="device-id">
+      <span class="eyebrow">UC Davis - ECE - Micropower Circuits and Systems</span>
+      <h1>ESP32 SD Recorder</h1>
+    </div>
+    <span class="pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Disconnected</span></span>
+  </header>
+
+  <div class="stage">
+    <button class="record-btn" id="recordBtn" disabled aria-label="Start recording">
+      <span class="glyph"></span>
+    </button>
+    <span class="record-label" id="recordLabel">Not connected</span>
+    <span class="elapsed mono" id="elapsed"></span>
+  </div>
+
+  <div class="alert" id="alert"><span class="alert-icon">⚠</span><span id="alertText"></span></div>
+
+  <div class="stats">
+    <div class="stat" id="dataStat">
+      <span class="stat-label">Audio saved</span>
+      <span class="stat-value mono" id="dataStatValue">—</span>
+    </div>
+    <div class="stat" id="storageStat">
+      <span class="stat-label">Free space</span>
+      <span class="stat-value mono" id="storageStatValue">—</span>
+    </div>
+  </div>
+
+  <div class="connect-row">
+    <button class="action primary" id="connectBtn">Connect</button>
+    <button class="action" id="disconnectBtn" disabled>Disconnect</button>
+  </div>
+
+  <div class="message" id="message">Tap Connect and choose "ESP32 SD Recorder" from the list.</div>
+
+  <details>
+    <summary>Technical details</summary>
+    <div class="uuids mono">
+      <div>service&nbsp; 6e400001-b5a3-f393-e0a9-e50e24dcca9e</div>
+      <div>control&nbsp; 6e400002-b5a3-f393-e0a9-e50e24dcca9e</div>
+      <div>status&nbsp;&nbsp; 6e400003-b5a3-f393-e0a9-e50e24dcca9e</div>
+    </div>
+    <div class="log mono" id="log"></div>
+  </details>
+
+  <div class="compat">
+    Needs Web Bluetooth: Chrome or Edge on desktop/Android. iOS Safari can't do this — use the free <strong>Bluefy</strong> browser app instead.
+  </div>
+</div>
+
+<script>
+  const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const CONTROL_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+  const STATUS_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+  const TIME_UUID = "6e400004-b5a3-f393-e0a9-e50e24dcca9e";
+
+  // Must match SAMPLE_RATE * CHANNELS * (BITS_PER_SAMPLE/8) in the firmware —
+  // used to turn a raw byte count into a trustworthy "audio saved" duration.
+  const BYTES_PER_SECOND = 48000 * 2 * 2;
+
+  // Status flag bits — must match STATUS_FLAG_* in the firmware.
+  const FLAG_RECORDING = 0x01;
+  const FLAG_SD_READY = 0x02;
+  const FLAG_LOW_SPACE = 0x04;
+  const FLAG_ERROR = 0x08;
+
+  const ERROR_MESSAGES = {
+    1: "SD card not ready — recording could not start.",
+    2: "SD write failed — recording was stopped to protect the file.",
+    3: "SD card was removed.",
+    4: "No free filename slots on the SD card.",
+    5: "Could not open a new file on the SD card.",
+    6: "Storage ran critically low — recording was stopped automatically.",
+    7: "Storage is too low to start a new recording.",
+  };
+
+  // The firmware sends a status heartbeat every 500ms (device-side
+  // STATUS_NOTIFY_INTERVAL_MS). If nothing arrives for this long while
+  // connected, treat the link as stale rather than trusting a frozen UI.
+  const STALE_STATUS_MS = 2500;
+  // If recording and the byte counter hasn't moved in this long, the write
+  // path may have silently stalled even though no explicit error was raised.
+  const STALL_DATA_MS = 4000;
+
+  const statusPill = document.getElementById("statusPill");
+  const statusPillText = document.getElementById("statusPillText");
+  const recordBtn = document.getElementById("recordBtn");
+  const recordLabel = document.getElementById("recordLabel");
+  const elapsedEl = document.getElementById("elapsed");
+  const connectBtn = document.getElementById("connectBtn");
+  const disconnectBtn = document.getElementById("disconnectBtn");
+  const messageEl = document.getElementById("message");
+  const logEl = document.getElementById("log");
+  const alertEl = document.getElementById("alert");
+  const alertTextEl = document.getElementById("alertText");
+  const dataStatValue = document.getElementById("dataStatValue");
+  const storageStat = document.getElementById("storageStat");
+  const storageStatValue = document.getElementById("storageStatValue");
+
+  let device = null;
+  let controlChar = null;
+  let statusChar = null;
+  let recording = false;
+  let connected = false;
+  let elapsedTimer = null;
+  let recordStartedAt = 0;
+
+  // Live status fields, kept in sync from every heartbeat/notification.
+  let lastStatusAt = 0;
+  let lastBytesWritten = 0;
+  let lastBytesChangeAt = 0;
+  let freeSpaceMB = 0;
+  let sdCardReady = false;
+  let lowSpace = false;
+  let currentErrorCode = 0;
+  let lastLoggedErrorCode = 0;
+  let linkStale = false;
+  let dataStalled = false;
+  let disconnectedWhileRecording = false;
+
+  function log(text) {
+    const row = document.createElement("div");
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    row.innerHTML = '<span class="t">' + time + "</span>" + text;
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setMessage(text, isError) {
+    messageEl.textContent = text;
+    messageEl.classList.toggle("error", !!isError);
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function formatDuration(totalSeconds) {
+    const secs = Math.max(0, Math.floor(totalSeconds));
+    return pad2(Math.floor(secs / 60)) + ":" + pad2(secs % 60);
+  }
+
+  function formatMB(mb) {
+    if (mb >= 1024) return (mb / 1024).toFixed(2) + " GB";
+    return mb.toFixed(mb >= 10 ? 0 : 1) + " MB";
+  }
+
+  function setAlert(text, level) {
+    if (!text) {
+      alertEl.classList.remove("visible", "warn");
+      alertTextEl.textContent = "";
+      return;
+    }
+    alertEl.classList.add("visible");
+    alertEl.classList.toggle("warn", level === "warn");
+    alertTextEl.textContent = text;
+  }
+
+  // Priority order: a link that dropped mid-recording is the most urgent
+  // thing to surface, down to a soft low-space heads-up. Only one banner is
+  // shown at a time; everything is still written to the log below.
+  function refreshAlert() {
+    if (disconnectedWhileRecording) {
+      setAlert("Connection dropped while a recording was in progress. The file on the SD card may be incomplete — reconnect to check the device.", "error");
+      return;
+    }
+    if (!connected) {
+      setAlert(null);
+      return;
+    }
+    if (linkStale) {
+      setAlert("No status update from the device in a while — the BLE link may be unstable. Recording confirmation can't be trusted until it recovers.", "warn");
+      return;
+    }
+    if (currentErrorCode) {
+      setAlert(ERROR_MESSAGES[currentErrorCode] || ("Device reported error code " + currentErrorCode), "error");
+      return;
+    }
+    if (dataStalled) {
+      setAlert("Recording is active but no new audio has been written in several seconds — the recording may have stalled.", "error");
+      return;
+    }
+    if (lowSpace) {
+      setAlert("Storage is getting low (" + formatMB(freeSpaceMB) + " free). Recording will stop automatically if it runs out.", "warn");
+      return;
+    }
+    setAlert(null);
+  }
+
+  function updateStatsUi() {
+    if (lastBytesWritten > 0 || recording) {
+      const audioSecs = lastBytesWritten / BYTES_PER_SECOND;
+      dataStatValue.textContent = formatDuration(audioSecs) + " · " + formatMB(lastBytesWritten / (1024 * 1024));
+    } else {
+      dataStatValue.textContent = "—";
+    }
+
+    storageStatValue.textContent = sdCardReady ? formatMB(freeSpaceMB) + " free" : "no card";
+    storageStat.classList.toggle("warn", lowSpace || !sdCardReady);
+  }
+
+  function setConnectedUi(isConnected) {
+    connected = isConnected;
+    connectBtn.disabled = isConnected;
+    disconnectBtn.disabled = !isConnected;
+    recordBtn.disabled = !isConnected;
+    if (!isConnected) {
+      statusPill.className = "pill";
+      statusPillText.textContent = "Disconnected";
+      recordLabel.textContent = "Not connected";
+      recordBtn.classList.remove("recording");
+      stopElapsedTimer();
+    }
+    refreshAlert();
+  }
+
+  // Only called on an actual recording-state transition (not on every
+  // heartbeat) so the elapsed timer doesn't get reset every 500ms.
+  function applyRecordingTransition(isRecording) {
+    recording = isRecording;
+    recordBtn.classList.toggle("recording", isRecording);
+    recordBtn.setAttribute("aria-label", isRecording ? "Stop recording" : "Start recording");
+    recordLabel.textContent = isRecording ? "Recording…" : "Ready";
+    statusPill.className = "pill " + (isRecording ? "rec" : "ok");
+    statusPillText.textContent = isRecording ? "Recording" : "Connected";
+
+    if (isRecording) {
+      recordStartedAt = Date.now();
+      startElapsedTimer();
+    } else {
+      stopElapsedTimer();
+    }
+  }
+
+  function startElapsedTimer() {
+    stopElapsedTimer();
+    tickElapsed();
+    elapsedTimer = setInterval(tickElapsed, 1000);
+  }
+
+  function stopElapsedTimer() {
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+    elapsedEl.textContent = "";
+  }
+
+  function tickElapsed() {
+    const secs = Math.floor((Date.now() - recordStartedAt) / 1000);
+    elapsedEl.textContent = formatDuration(secs);
+  }
+
+  // Shared by the initial post-connect read and every subsequent
+  // notification, so both paths agree on what "current status" means.
+  function processStatusValue(value) {
+    if (value.byteLength < 10) {
+      log("warning: status payload too short (" + value.byteLength + " bytes) — device firmware may be out of date");
+      return;
+    }
+
+    const flags = value.getUint8(0);
+    const bytesWritten = value.getUint32(1, true);
+    const freeMB = value.getUint32(5, true);
+    const errCode = value.getUint8(9);
+
+    const isRecording = !!(flags & FLAG_RECORDING);
+    sdCardReady = !!(flags & FLAG_SD_READY);
+    lowSpace = !!(flags & FLAG_LOW_SPACE);
+    currentErrorCode = (flags & FLAG_ERROR) ? errCode : 0;
+    freeSpaceMB = freeMB;
+
+    lastStatusAt = Date.now();
+    linkStale = false;
+
+    if (bytesWritten !== lastBytesWritten) {
+      lastBytesWritten = bytesWritten;
+      lastBytesChangeAt = Date.now();
+      dataStalled = false;
+    }
+
+    if (currentErrorCode !== lastLoggedErrorCode) {
+      lastLoggedErrorCode = currentErrorCode;
+      log(currentErrorCode
+        ? "device error: " + (ERROR_MESSAGES[currentErrorCode] || ("code " + currentErrorCode))
+        : "device error cleared");
+    }
+
+    if (isRecording !== recording) {
+      applyRecordingTransition(isRecording);
+      log(isRecording ? "device reports: recording started" : "device reports: recording stopped");
+    }
+
+    updateStatsUi();
+    refreshAlert();
+  }
+
+  function onStatusNotify(event) {
+    processStatusValue(event.target.value);
+  }
+
+  // Runs once a second while connected to catch problems that don't arrive
+  // as a discrete event: a link that's gone quiet, or a recording whose byte
+  // counter has stopped moving without an explicit device-side error.
+  function watchdogTick() {
+    if (!connected) return;
+    const now = Date.now();
+    if (now - lastStatusAt > STALE_STATUS_MS) {
+      linkStale = true;
+    }
+    if (recording && now - lastBytesChangeAt > STALL_DATA_MS) {
+      dataStalled = true;
+    }
+    refreshAlert();
+  }
+  setInterval(watchdogTick, 1000);
+
+  function onDisconnected() {
+    log("gatt server disconnected");
+    if (recording) {
+      disconnectedWhileRecording = true;
+      log("warning: link dropped while a recording was in progress");
+    }
+    setMessage("Disconnected. Tap Connect to reconnect.");
+    controlChar = null;
+    statusChar = null;
+    setConnectedUi(false);
+  }
+
+  // The board has no RTC, so it starts at 1970 on every boot and its WAV files
+  // get dated 1980 (shown as Dec 31 1979). Send it local wall-clock time (Unix
+  // seconds shifted by our UTC offset) so file timestamps are correct.
+  // Firmware without the time characteristic just skips this.
+  async function syncClock(service) {
+    try {
+      const timeChar = await service.getCharacteristic(TIME_UUID);
+      const now = new Date();
+      const localSeconds = Math.floor(now.getTime() / 1000) - now.getTimezoneOffset() * 60;
+      const buf = new DataView(new ArrayBuffer(4));
+      buf.setUint32(0, localSeconds, true);
+      await timeChar.writeValue(buf.buffer);
+      log("clock synced: " + now.toLocaleString());
+    } catch (err) {
+      log("clock sync skipped: " + err.message);
+    }
+  }
+
+  async function connect() {
+    if (!navigator.bluetooth) {
+      setMessage("This browser doesn't support Web Bluetooth. Use Chrome/Edge on desktop or Android, or the Bluefy app on iOS.", true);
+      return;
+    }
+
+    // A fresh connection attempt clears stale state from any previous
+    // session so old warnings don't linger once we're reconnected.
+    disconnectedWhileRecording = false;
+    linkStale = false;
+    dataStalled = false;
+    currentErrorCode = 0;
+    lastLoggedErrorCode = 0;
+
+    try {
+      setMessage("Opening device chooser…");
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+      });
+      device.addEventListener("gattserverdisconnected", onDisconnected);
+
+      setMessage("Connecting to " + (device.name || "device") + "…");
+      log("connecting to " + (device.name || "unnamed device"));
+      const server = await device.gatt.connect();
+
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      controlChar = await service.getCharacteristic(CONTROL_UUID);
+      statusChar = await service.getCharacteristic(STATUS_UUID);
+
+      await syncClock(service);
+
+      const initial = await statusChar.readValue();
+      processStatusValue(initial);
+
+      await statusChar.startNotifications();
+      statusChar.addEventListener("characteristicvaluechanged", onStatusNotify);
+
+      setConnectedUi(true);
+      setMessage("Connected. Tap the button to start or stop recording.");
+      log("connected, subscribed to status notifications");
+    } catch (err) {
+      if (err.name === "NotFoundError") {
+        setMessage("No device selected.");
+      } else {
+        setMessage("Connection failed: " + err.message, true);
+        log("error: " + err.message);
+      }
+      setConnectedUi(false);
+    }
+  }
+
+  function disconnect() {
+    if (device && device.gatt.connected) {
+      device.gatt.disconnect();
+    }
+  }
+
+  async function toggleRecording() {
+    if (!controlChar) return;
+    recordBtn.disabled = true;
+    try {
+      await controlChar.writeValue(new Uint8Array([recording ? 0 : 1]));
+      log("sent: " + (recording ? "stop" : "start"));
+    } catch (err) {
+      setMessage("Write failed: " + err.message, true);
+      log("error: " + err.message);
+    } finally {
+      recordBtn.disabled = false;
+    }
+  }
+
+  connectBtn.addEventListener("click", connect);
+  disconnectBtn.addEventListener("click", disconnect);
+  recordBtn.addEventListener("click", toggleRecording);
+
+  if (!navigator.bluetooth) {
+    setMessage("This browser doesn't support Web Bluetooth. Use Chrome/Edge on desktop or Android, or the Bluefy app on iOS.", true);
+  }
+</script>

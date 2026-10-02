@@ -1,0 +1,7 @@
+# Local Claude Code settings/runtime state (machine-specific)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# OS cruft
+Thumbs.db
+.DS_Store
